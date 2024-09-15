@@ -1,0 +1,22 @@
+```ansi
+[0;36mcontract [0;32mCursedAuction [0;33m{
+    [0;32mERC20 [0;37mtoken;
+
+    [0;32maddress [0;37mhighestBidder;
+
+    [0;32muint256 [0;37mhighestBid;
+
+    [0;36mfunction [0;33mbid[0;36m([0;32muint256 [0;37mamount[0;36m) external [0;33m{
+        [0;35mrequire[0;36m([0;37mamount > highestBid, [0;33m"higher bid required"[0;36m)[0;37m;
+        [0;32maddress [0;37moldBidder = highestBidder;
+        [0;32muint256 [0;37moldBid = highestBid;
+        [0;37mhighestBidder = msg.sender;
+        [0;37mhighestBid = amount;
+        [0;35mrequire[0;36m([0;37mtoken.[0;33mtransferFrom[0;34m([0;37mmsg.sender, [0;32maddress([0;37mthis[0;32m)[0;37m, amount[0;36m), [0;33m"transfer failed"[0;36m);
+        [0;35mif ([0;37moldBidder != [0;32maddress([0;37m0[0;32m)[0;35m) {
+            [0;35mtry [0;37mtoken.[0;33mtransferFrom[0;34m([0;32maddress([0;37mthis[0;32m)[0;37m, oldBidder, oldBid[0;36m) {
+            } [0;35mcatch {}
+        }
+    }
+}```
+btw

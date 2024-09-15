@@ -6,7 +6,7 @@ But it does allow ansi: https://gist.github.com/kkrypt0nn/a02506f3712ff2d1c8ca7c
 
 Solution is to parse the code to [AST](https://en.wikipedia.org/wiki/Abstract_syntax_tree), colorize, and output.
 
-![Video](./readme_example/ex.mp4)
+![Image](./readme_example/ex.gif)
 
 ### Install and Usage
 

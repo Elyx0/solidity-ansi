@@ -160,8 +160,9 @@ function collectTokens(ast, code, commentsRange) {
                 }
             }
         },
+        // Probably Unused, can't hit it
         TypeConversion(node) {
-            console.log(node);
+            //console.log(node);
             if (isRangeInComments(node.range, commentsRange)) return;
             if (seen[node.range.join(',')]) return;
             seen[node.range.join(',')] = true;
@@ -497,7 +498,7 @@ function collectTokens(ast, code, commentsRange) {
                 if (seen[node.range.join(',')]) return;
                 seen[node.range.join(',')] = true;
                 seen[node.range[0]] = node.value.length;
-                console.log('Seen', node.range.join(','));
+               // console.log('Seen', node.range.join(','));
                 tokens.push({
                     type: 'string',
                     value: node.value,
@@ -542,7 +543,7 @@ function collectTokens(ast, code, commentsRange) {
 
         FunctionCall(node) {
             if (isRangeInComments(node.range, commentsRange)) return;
-            console.log(node);
+            //console.log(node);
 
             if (seen[node.expression.name+node.range.join(',')]) return;
             if (node.expression.type === 'Identifier') {

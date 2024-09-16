@@ -4,6 +4,23 @@ import colors from './colors.mjs'
 
 const commentPattern = /\/\/.*$|\/\*[\s\S]*?\*\//gm;
 
+const solidityTypes = new Set([
+    'address', 'uint', 'uint8', 'uint16', 'uint32', 'uint64', 'uint128', 'uint256',
+    'int', 'int8', 'int16', 'int32', 'int64', 'int128', 'int256',
+    'bool', 'bytes', 'bytes1', 'bytes2', 'bytes3', 'bytes4', 'bytes5', 'bytes6',
+    'bytes7', 'bytes8', 'bytes9', 'bytes10', 'bytes11', 'bytes12', 'bytes13',
+    'bytes14', 'bytes15', 'bytes16', 'bytes17', 'bytes18', 'bytes19', 'bytes20',
+    'bytes21', 'bytes22', 'bytes23', 'bytes24', 'bytes25', 'bytes26', 'bytes27',
+    'bytes28', 'bytes29', 'bytes30', 'bytes31', 'bytes32',
+    'string'
+]);
+
+const solidityGlobalVars = new Set([
+    'constructor', 'block', 'tx', 'now', 'msg.sender', 'msg.value', 'msg.data', 'msg.sig',
+    'msg.gas', 'block.coinbase', 'block.difficulty', 'block.gaslimit', 'block.number',
+    'block.timestamp', 'tx.gasprice', 'tx.origin'
+]);
+
 /**
  * Check if a given range overlaps with any comment ranges.
  * @param {Array} range - [start, end]
@@ -11,10 +28,28 @@ const commentPattern = /\/\/.*$|\/\*[\s\S]*?\*\//gm;
  * @returns {boolean} - True if overlapping, else false.
  */
 function isRangeInComments(range, commentRanges) {
+    if (!range || !commentRanges) return true;
     return commentRanges.some(commentRange =>
         range[0] >= commentRange[0] && range[1] <= commentRange[1]
     );
 }
+
+function getFullMemberExpression(node) {
+    let parts = [];
+    let current = node;
+
+    while (current.type === 'MemberAccess') {
+        parts.unshift(current.memberName);
+        current = current.expression;
+    }
+
+    if (current.type === 'Identifier') {
+        parts.unshift(current.name);
+    }
+
+    return parts.join('.');
+}
+
 
 /**
  * Extracts comments from the Solidity code.
@@ -125,6 +160,44 @@ function collectTokens(ast, code, commentsRange) {
                 }
             }
         },
+        TypeConversion(node) {
+            console.log(node);
+            if (isRangeInComments(node.range, commentsRange)) return;
+            if (seen[node.range.join(',')]) return;
+            seen[node.range.join(',')] = true;
+          
+            if (node.typeName) {
+                const typeName = node.typeName.name;
+                tokens.push({
+                    type: 'type',
+                    value: typeName,
+                    range: [node.typeName.range[0], node.typeName.range[1]+1]
+                });
+            }
+        },
+        MemberAccess(node) {
+            if (isRangeInComments(node.range, commentsRange)) return;
+            if (seen[node.memberName+node.range.join(',')]) return;
+            
+            // Reconstruct the full member expression (e.g., msg.sender)
+            const fullExpression = getFullMemberExpression(node);
+            if (solidityGlobalVars.has(fullExpression)) {
+                // Colorize the entire expression as 'visibility'
+                tokens.push({
+                    type: 'keyword',
+                    value: fullExpression,
+                    range: [node.range[0], node.range[1] + 1]
+                });
+                return;
+            } 
+
+            tokens.push({
+                type: 'memberAccess',
+                value: node.memberName,
+                range: [node.range[0] + node.expression.range[1] - node.expression.range[0] + 2, node.range[1] + 1]
+            });
+            seen[node.memberName+node.range.join(',')] = true;
+        },
         EventDefinition(node) {
             tokens.push({
                 type: 'keyword',
@@ -143,14 +216,14 @@ function collectTokens(ast, code, commentsRange) {
                 range: [node.range[0], node.range[0] + 'emit'.length]
             });
             //console.log(node);
-            if (node.eventCall) {
-                const funcName = node.eventCall.expression.name;
-                tokens.push({
-                    type: 'eventName',
-                    value: funcName,
-                    range: [node.eventCall.range[0], node.eventCall.range[0] + funcName.length]
-                });
-            }
+            // if (node.eventCall) {
+            //     const funcName = node.eventCall.expression.name;
+            //     tokens.push({
+            //         type: 'eventName',
+            //         value: funcName,
+            //         range: [node.eventCall.range[0], node.eventCall.range[0] + funcName.length]
+            //     });
+            // }
         },
         HexNumber(node) {
             if (isRangeInComments(node.range, commentsRange)) return;
@@ -301,25 +374,54 @@ function collectTokens(ast, code, commentsRange) {
                 }
             }
         },
-
-        // Handle Variable Declarations
-        VariableDeclaration(node) {
-            // Handle the type
+        TypeNameExpression(node) {
+     
             if (isRangeInComments(node.range, commentsRange)) return;
-            let potentialName = node.typeName.name || node.typeName?.baseTypeName?.name;
-            if (node.typeName && potentialName) {
-               // console.log(potentialName,'potentialName');
-                if (node.typeName.type == 'ArrayTypeName') {
-                    node.typeName.range[1] -= 2;
-                }
-                //console.log(node,node.typeName.loc);
-                const typeName = potentialName;
+            if (seen[node.range.join(',')]) return;
+            seen[node.range.join(',')] = true;
+            //console.log(node);
+            if (node.name) {
+                const typeName = node.name;
                 tokens.push({
                     type: 'type',
                     value: typeName,
-                    range: [node.typeName.range[0], node.typeName.range[1]+1]
+                    range: [node.range[0], node.range[1]+1]
                 });
             }
+        },
+        ElementaryTypeName(node) {
+            //console.log(node);
+            if (isRangeInComments(node.range, commentsRange)) return;
+            if (seen[node.range.join(',')]) return;
+            console.log(node);
+            tokens.push({
+                type: 'type',
+                value: node.name,
+                range: [node.range[0], node.range[1]+1]
+            });
+            seen[node.range.join(',')] = true;
+        },
+        // Handle Variable Declarations
+        VariableDeclaration(node) {
+            // Handle the type
+  
+            if (isRangeInComments(node.range, commentsRange)) return;
+            if (seen[node.range.join(',')]) return;
+            seen[node.range.join(',')] = true;
+            // let potentialName = node.typeName.name || node.typeName?.baseTypeName?.name;
+            // if (node.typeName && potentialName) {
+            //    // console.log(potentialName,'potentialName');
+            //     if (node.typeName.type == 'ArrayTypeName') {
+            //         node.typeName.range[1] -= 2;
+            //     }
+            //     //console.log(node,node.typeName.loc);
+            //     const typeName = potentialName;
+            //     tokens.push({
+            //         type: 'type',
+            //         value: typeName,
+            //         range: [node.typeName.range[0], node.typeName.range[1]+1]
+            //     });
+            // }
 
             // Handle the variable name
             if (node.name) {
@@ -342,15 +444,15 @@ function collectTokens(ast, code, commentsRange) {
                         range: [nameStart, nameEnd]
                     });
                 } else {
-                    // Fallback: Search for the variable name after the type
-                    const actualStart = code.indexOf(varName, typeEnd);
-                    if (actualStart !== -1) {
-                        tokens.push({
-                            type: 'identifier',
-                            value: varName,
-                            range: [actualStart, actualStart + varName.length]
-                        });
-                    }
+                    // // Fallback: Search for the variable name after the type
+                    // const actualStart = code.indexOf(varName, typeEnd);
+                    // if (actualStart !== -1) {
+                    //     tokens.push({
+                    //         type: 'identifier',
+                    //         value: varName,
+                    //         range: [actualStart, actualStart + varName.length]
+                    //     });
+                    // }
                 }
             }
             //console.log(node);
@@ -392,19 +494,16 @@ function collectTokens(ast, code, commentsRange) {
 
             if (typeof node.value === 'string') {
                 // Check if value not seen at range
-                if (!seen[node.value]?.includes(node.range.join(','))) {
+                if (seen[node.range.join(',')]) return;
+                seen[node.range.join(',')] = true;
+                seen[node.range[0]] = node.value.length;
+                console.log('Seen', node.range.join(','));
                 tokens.push({
                     type: 'string',
                     value: node.value,
                     range: node.range
                 });
-                // Add to seen
-                if (!seen[node.value]) {
-                    seen[node.value] = [];
-                    seen[node.value].push(node.range.join(','));
-                }
             }
-        }
         },
         NumberLiteral(node) {
             if (isRangeInComments(node.range, commentsRange)) return;
@@ -441,21 +540,48 @@ function collectTokens(ast, code, commentsRange) {
             }
         },
 
+        FunctionCall(node) {
+            if (isRangeInComments(node.range, commentsRange)) return;
+            console.log(node);
+
+            if (seen[node.expression.name+node.range.join(',')]) return;
+            if (node.expression.type === 'Identifier') {
+                let finalType = solidityTypes.has(node.expression.name) ? 'type' : 'memberAccess';
+                if (node.expression.name === 'keccak256') {
+                    finalType = 'funcName';
+                }
+
+                tokens.push({
+                    type: finalType,
+                    value: node.expression.name,
+                    range: [node.expression.range[0], node.expression.range[1]+1]
+                });
+            }
+            // tokens.push({
+            //     type: 'funcName',
+            //     value: node.expression.name,
+            //     range: [node.expression.range[0], node.expression.range[1]+1]
+            // });
+            seen[node.expression.name+node.range.join(',')] = true;
+        },
+
+
         // Handle Require Statements (as an example)
         ExpressionStatement(node) {
             if (isRangeInComments(node.range, commentsRange)) return;
-
+            if (seen[node.range.join(',')]) return;
+            seen[node.range.join(',')] = true;
             if (node.expression && node.expression.type === 'FunctionCall') {
                 const funcName = node.expression.expression.name;
-                if (funcName === 'require') {
-                    const requireStart = node.expression.range[0];
-                    const requireEnd = requireStart + 'require'.length;
-                    tokens.push({
-                        type: 'keyword',
-                        value: 'require',
-                        range: [requireStart, requireEnd]
-                    });
-                }
+                // if (funcName === 'require') {
+                //     const requireStart = node.expression.range[0];
+                //     const requireEnd = requireStart + 'require'.length;
+                //     tokens.push({
+                //         type: 'keyword',
+                //         value: 'require',
+                //         range: [requireStart, requireEnd]
+                //     });
+                // }
             }
         },
         // Identifier(node, parent) {
@@ -499,6 +625,10 @@ function collectTokens(ast, code, commentsRange) {
 
     // Scan for all '(' and ')' in the code
     for (let i = 0; i < code.length; i++) {
+        if (seen[i]) {
+            i+=seen[i];
+            continue;
+        }
         const char = code[i];
         if (char === '(' || char === ')' || char === '{' || char === '}') {
             const range = [i, i + 1];
@@ -519,25 +649,26 @@ function collectTokens(ast, code, commentsRange) {
             });
         }
     }
-    // Find all occurences of those variables and colorize them like `msg.sender`
-    const globalVars = ['msg','type', 'block', 'tx', 'now', 'msg.sender', 'msg.value', 'msg.data', 'msg.sig', 'msg.gas', 'block.coinbase', 'block.difficulty', 'block.gaslimit', 'block.number', 'block.timestamp', 'tx.gasprice', 'tx.origin'];
-    // Sort by length in descending order
-    globalVars.sort((a, b) => b.length - a.length);
-    // Transform into a regex
-    const globalVarsRegex = new RegExp(globalVars.join('|'), 'g');
-    let match;
-    while ((match = globalVarsRegex.exec(code)) !== null) {
-        const varName = match[0];
-        const startIndex = match.index;
-        const endIndex = match.index + varName.length;
-        const range = [startIndex, endIndex];
-        if (isRangeInComments(range, commentsRange)) continue;
-        tokens.push({
-            type: 'visibility',
-            value: varName,
-            range: [startIndex, endIndex]
-        });
-    }
+    // // Find all occurences of those variables and colorize them like `msg.sender`
+    // const globalVars = ['constructor', 'block', 'tx', 'now', 'msg.sender', 'msg.value', 'msg.data', 'msg.sig', 'msg.gas', 'block.coinbase', 'block.difficulty', 'block.gaslimit', 'block.number', 'block.timestamp', 'tx.gasprice', 'tx.origin'];
+    // // Sort by length in descending order
+    // globalVars.sort((a, b) => b.length - a.length);
+    // // Transform into a regex
+    // const globalVarsRegex = new RegExp(globalVars.join('|'), 'g');
+    // let match;
+    // while ((match = globalVarsRegex.exec(code)) !== null) {
+    //     const varName = match[0];
+    //     const startIndex = match.index;
+    //     const endIndex = match.index + varName.length;
+    //     const range = [startIndex, endIndex];
+    //     if (isRangeInComments(range, commentsRange)) continue;
+    //     seen[varName+range.join(',')] = true;
+    //     tokens.push({
+    //         type: 'visibility',
+    //         value: varName,
+    //         range: [startIndex, endIndex]
+    //     });
+    // }
 
     const globalVarsRegexExtra = new RegExp(/return\s|assembly\s/, 'g');
 
@@ -560,7 +691,7 @@ function collectTokens(ast, code, commentsRange) {
 const colorsMap = {
     keyword: colors.fg.blue,
     type: colors.fg.cyan,
-    string: colors.fg.yellow,
+    string: colors.fg.green,
     identifier: colors.fg.white,
     number: colors.fg.blue,
     operator: colors.fg.white,
@@ -575,6 +706,7 @@ const colorsMap = {
     returnsKeyword: colors.fg.magenta,
     hexNumber: colors.fg.green,
     structName: colors.fg.green,
+    memberAccess: colors.fg.yellow,
 };
 
 /**

@@ -1,28 +1,19 @@
 contract Random {
-   string public name = "Purr";
-   mapping (address => uint) public totalHiss;
-    struct Meow {
-       address[] canPat;
-       uint256 scratHash;
-       mapping (address => mapping (uint => bool))  willScratch;
-    }
-    // Feel free to comment here  
-    function adopt(address _owner) public view returns (uint balance) {
-        require(balances[_owner] >= 0, "No");
-        assembly {
-            sstore(0x20, 0x20)
-        }
-        return balances[_owner];
-    }
-    function totalSupply() public view returns (uint) {
-        return address(this).balance;
-    }
-    function approve(address guy, uint wad) public returns (bool) {
-        allowance[msg.sender][guy] = wad;
-        emit Approval(msg.sender, guy, wad);
-        return true;
-    }
-    function transfer(address dst, uint wad) public returns (bool) {
-        return transferFrom(msg.sender, dst, wad);
+    uint private seed = 0;
+    uint[] private a;
+    event Log(uint c);
+    function testA() public {
+
+    uint c = keccak256("testB(12){}");
+    emit Log(c);
+    require(success, "Failed to initialize router");
+      vm.startPrank(me);
+      address b = address(this);
+       uint[] b = address(a);
+      address(a).call();
+      deposit();
+       address(a).call(bytes4(keccak256("testB()")));
+         vm.stopPrank();
+       abi.decode("0x12345678", (uint));
     }
 }

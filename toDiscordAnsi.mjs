@@ -17,17 +17,25 @@ if (!inputFile) {
  * @param {string} code - The original Solidity code.
  * @returns {string} - The colored Solidity code with ANSI codes.
  */
-function highlightSolidityCode(code) {
+function highlightSolidityCode(originalCode) {
     let ast;
     let surroundedCode = false;
+    let code = originalCode;
     try {
-        const result  = parseSolidity(code);
+        const result  = parseSolidity(originalCode);
         ast = result.ast;
     } catch (error) {
         if (error.message.includes("Cannot read properties of null (reading 'getText')")) {
-            code = `contract Dummy {\n${code}\n}`;
+            code = `contract Dummy {\n${originalCode}\n}`;
             surroundedCode = true;
-            ast = parseSolidity(code).ast;
+            try {
+                ast = parseSolidity(code).ast;
+            }
+            catch(error) {
+                code = `contract Dummy { function dum() {\n${originalCode}\n}}`;
+                surroundedCode = true;
+                ast = parseSolidity(code).ast;
+            }
         }
     }
     const astTokens = collectAllTokens(ast, code);
